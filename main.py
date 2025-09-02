@@ -2,9 +2,8 @@ import emu
 processor6502 = emu.Processor()
 mainasm = open('main.asm', 'r').read().split("\n")
 i = 0
-debug = True
+debug = False
 while True:
-	print("A at " + str(i) + ":" + str(processor6502.accumulator))
 	if i == len(mainasm)-1:
 		print("eof")
 		break
