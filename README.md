@@ -14,4 +14,8 @@ STA
 NOP
 
 **What's the end goal again?**
-To run wozmod and maybe even Apple 1 basic as was run once on Apple machines. This could be a really cool (slow) way to emulate on less capable machines that run Python.
+To run wozmod and maybe even Apple 1 basic as was run once on Apple machines.
+
+**Why do this?**
+Free will.
+And a desire to learn 6502 but in a unique way.
