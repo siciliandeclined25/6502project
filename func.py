@@ -2,7 +2,7 @@ import numpy as np
 import simpleaudio as sa
 
 
-def beeo():
+def beep():
 # Parameters for an Apple II–style beep
 	frequency = 1024  # ~1 kHz
 	duration = 0.1    # 100 ms
@@ -18,4 +18,3 @@ def beeo():
 # Play it
 	play_obj = sa.play_buffer(audio, 1, 2, sample_rate)
 	play_obj.wait_done()
-

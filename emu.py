@@ -1,142 +1,140 @@
+import subprocess
 
+class SixFiveOTwo:
+  def __init__(self, file="mem.b", size=0x1000):
+    self.memoryFile = file
+    data = bytes(size) #fill full of empty 0s
+    with open(self.memoryFile, "wb") as f:
+         f.write(data)
+    #my own homemade 6502 optable!
+    self.optable = {
+    "BRK impl": {"ascii": "BRK", "bytes": 00, "space": 1},
+    "NOP impl": {"ascii": "NOP", "bytes": 0xEA,  "space": 1},
+    "LDA zpg": {"ascii": "LDA", "bytes": 0xA5,  "space": 2}, #zeropage (0-256)
+    "LDA imm": {"ascii": "LDA", "bytes": 0xA9,  "space": 2}, #LDA immediate (just load hex value into accumulator
+    "LDA zpg x": {"ascii": "LDA", "bytes": 0xB5,  "space": 2},#zeropage x adds the values in the zeropage address and x and stores them into the accumulator
+    "LDA abs": {"ascii": "LDA", "bytes": 0x01}
 
+    }
+    #6502 memory variables!!!
+    self.a = 0
+    self.x = 0
+    self.y = 0
+    self.pc = 0 #program counter
+    self.sp = 0x0100 #stack pointer
+    self.nextPCIncrement = 0
+  class Memory:
+    def getB(self, byteLocation):
+      print("bytelocation" + str(byteLocation))
+      print(list(open(self.memoryFile, "rb").read()))
+      memoryInt = list(open(self.memoryFile, "rb").read())
+      return memoryInt[byteLocation]
+    def setB(self, byteLocation, byteValue):
+      memoryInt = list(open(self.memoryFile, "rb").read())
+      memoryInt[byteLocation] = byteValue
+      open(self.memoryFile, "wb").write(bytes(memoryInt))
+    def memoryDisplayer(self):
+      print("MEMORY")
+      memoryInt = list(open(self.memoryFile, "rb").read())
+      i = 0
+      while True:
+        print(str(hex(i)) + " > " + str(hex(memoryInt[i])))
+        userPrompt = input("(G)oto addr (S)pecial values (C)hange value (Q)uit").lower()
+        if userPrompt == "q":
+          break
+        if userPrompt == "s":
+          print("A: " + str(self.a))
+          print("X: " + str(self.x))
+          print("Y: " + str(self.y))
+          print("PC: " + str(self.pc))
 
+        if userPrompt == "g":
+          i = int(input("Type in a hex memory address>"), 10)
+  def convert(self, fileIn):
+    fileToConvert = list(open(fileIn, "r"))
+    bytesGiven = []
+    byteLocation = 0
+    print("CONVERTING....")
+    while True:
+      print(byteLocation)
+      print(fileToConvert)
+      if len(fileToConvert) == byteLocation:
+          break
+      currentByte = fileToConvert[byteLocation]
+      print(".", end="")
+      trueKeyword = currentByte.split(";")[0].split()[0]
+      try:
+        trueByteValue = currentByte.split()[1]
 
+      except IndexError:
+        print("firstbytenoexist")
+        trueByteValue = ""
+      #BRK convert
+      if trueKeyword == "BRK":
+        bytesGiven.append(self.optable["BRK impl"]["bytes"])
+        byteLocation += 1
+      elif trueKeyword == "NOP":
+        bytesGiven.append(self.optable["NOP impl"]["bytes"])
+        byteLocation += 1
+      elif trueKeyword == "LDA":
+        print("LDA reached")
+        print(trueByteValue[0])
+        if trueByteValue[0] == "#":
+          #this is immediate addressing
+          #which means the value is
+          #being loaded itself into the hex
+          bytesGiven.append(self.optable["LDA imm"]["bytes"])
+          #adds the current byte value
+          bytesGiven.append(int(trueByteValue[2:]))
+          #increment by two
+          byteLocation += 1
+    #this is to add the remaining memory addresses
+    bytesGiven += [0] * (4096 - len(bytesGiven))
+    open(self.memoryFile, "wb").write(bytes(bytesGiven))
+    memoryInt = list(open(self.memoryFile, "rb").read())
+    print("MEMORY WRITTEN")
+    print(memoryInt)
+    input("ready>")
+  def executeInstruction(self, opCodeToexecute):
+    opInt = int(opCodeToexecute, 16)
+    firstValueByte = self.Memory.getB(self, self.pc+1)
+    secondValueByte = self.Memory.getB(self, self.pc+2)
+    #this is to get the next byte incase the 6502
+    #uses it in its operation, and the next after
+    if opInt == 0: #BRK impl
+      #increment program counter
+      self.pc += 1
+      return "brk"
+    if opInt == 164: #LDA zpg
+      self.pc += 2 #two offset for value
+      self.a = self.Memory.getB(self.pc+1)
+    if opInt == 164: #LDA zpg
+      #loads the zeropage value from 0-256
+      #into the accumulator
+      self.pc += 2 #two offset for value
+      #todo
+    if opInt == 169: #LDA immediate
+      #loads the hex value given as output to
+      #the value given
+      print(firstValueByte)
+      self.pc += 2
+      self.a = firstValueByte
+    if opInt == 234: #NOP impl
+      #increment program counter
+      self.pc += 1
 
-
-
-
-class Processor:
-
-	def __init__(self):
-		self.accumulator = 0x0000 #current memory location, or "A"
-		self.registerX = 0
-		self.registerY = 0
-		self.programCounter = 0
-		self.memory = [0x0000] * 1024 #1 KB of (emulated) storage!
-		self.zeroFlag = False
-		self.negativeFlag = False
-		self.debugVerbose = False
-	def displayDebugInfo(self, detailed=False):
-		print("A: " + str(self.accumulator))
-		### TODO add robust check for every command and memory operation 
-	def instructionOperate(self, instruction):
-		try: #comment removal
-			trueinstruction, comment = instruction.split(";")
-		except ValueError:
-			trueinstruction = instruction #no comment
-		try:	#split value and instruction
-			instructionNamespace, instructionValue = trueinstruction.split()
-		except ValueError as e:
-			print("program terminated")
-			print(e)
-			return False
-		#increment program counter
-		self.programCounter += 1
-		if instructionNamespace == "NOP":
-			#NOP - does nothing
-			pass #hard to understand, but nothing happens
-		if instructionNamespace == "LDA":
-			#LDA - stores a byte or a value at a register
-			#first we have to determine based on the ruleset
-			#whether the LDA is accessing and storing the value
-			#located at the point to the accumulator
-			#which is determined by whether the InstructionValue's
-			#pointer == #$01 (this means ADD the value to the acc)
-			#or i
-			if instructionValue[0] == "#": # immediate (load the value given instead 
-			#of the memory pointer.
-				self.accumulator = int(instructionValue.replace("#", "").replace("$", "").replace(",", " + "), 16)
-				
-				#ZEROFLAG
-				if int(instructionValue.replace("#", "").replace("$", "").replace(",", " + "), 16) == 0:
-					self.zeroFlag = True
-				else:
-					self.zeroFlag = False
-			#otherwise we need to load the pointer where the memory is located
-			if instructionValue[0] == "$":
-				baseTenValue = self.memory[int(instructionValue.replace("$", "0x"), 0)]
-				#convert pointer to integer to memory value, the return memory's value (in hex!!!)
-				self.accumulator = baseTenValue	
-				
-				#ZEROFLAG
-				if baseTenValue == 0:
-					self.zeroFlag = True
-				else:
-					self.zeroFlag = False
-		if instructionNamespace == "STA":
-			#STA - stores value in register at the accumulator
-			if self.debugVerbose:
-				print("OLD VALUE AT MEMORY ADDR" + instructionValue)
-				print(instructionValue + " | " + str(self.memory[int(instructionValue.replace("$", ""), 16)]))
-			#store accumulator, or a function which takes the value
-			#in the accumulator and stores it into memory at a location
-			#i don't fully understand but python can take any base value and access it's according
-			#index in a list so let's just go with it
-			self.memory[int(instructionValue.replace("$", ""), 16)] = self.accumulator
-			#more debug stuff
-			if self.debugVerbose:
-				print("NEW VALUE AT MEMORY ADDR ")
-				print(self.memory[int(instructionValue.replace("$", ""), 16)])
-			#ZEROFLAG
-			if self.memory[int(instructionValue.replace("$", ""), 16)] == 0:
-				self.zeroFlag = True
-			else:
-				self.zeroFlag = False
-		if instructionNamespace == "TAX":
-			## TAX- sets the value in the A register to X
-			self.registerX = self.accumulator
-
-			##ZEROFLAG
-			if self.accumulator == 0:
-				self.zeroFlag = True#set zeroflag because 6502
-			else:
-				self.zeroFlag = False
-		if instructionNamespace == "INX":
-			##INX -- increments the value in the X by one
-			if self.registerX == 255:
-				self.registerX = 0
-				self.zeroFlag = True
-			else:
-				self.registerX += 1
-				self.zeroFlag = False
-		if instructionNamespace == "DEX":
-			##DEX -- deincrements the value in the X by one
-			self.registerX -= 1
-			if self.registerX == 0:
-				self.zeroFlag = True
-			elif self.registerX == -1:
-				self.zeroFlag = False
-				self.registerX = 255
-			else:	
-				self.zeroFlag = False
-		if instructionNamespace == "TAY":
-			## TAX- sets the value in the A register to Y
-			self.registerY = self.accumulator
-
-			##ZEROFLAG
-			if self.accumulator == 0:
-				self.zeroFlag = True#set zeroflag because 6502
-			else:
-				self.zeroFlag = False
-		if instructionNamespace == "INY":
-			##INY -- increments the value in the Y by one
-			if self.registerY == 255:
-				self.registerY = 0
-				self.zeroFlag = True
-			else:
-				self.registerY += 1
-				self.zeroFlag = False
-		if instructionNamespace == "DEX":
-			##DEY -- deincrements the value in the Y by one
-			self.registerY -= 1
-			if self.registerY == 0:
-				self.zeroFlag = True
-			elif self.registerY == -1:
-				self.zeroFlag = False
-				self.registerY = 255
-			else:	
-				self.zeroFlag = False
-
-
-	#schoonover	
+  def start(self):
+    memoryInt = list(open(self.memoryFile, "rb").read())
+    memoryHex = [hex(b) for b in memoryInt]
+    while True:
+      try:
+        returnCode = self.executeInstruction(memoryHex[self.pc])
+      except Exception as e:
+        print("TERMINAL ERROR")
+        print("*********")
+        subprocess.run(["afplay", "err.mp3"])
+        raise e
+      if returnCode == "brk":
+        print("PROGRAM ENDED")
+        break
+    self.Memory.memoryDisplayer(self)
