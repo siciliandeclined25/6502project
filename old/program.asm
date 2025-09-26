@@ -1,4 +1,0 @@
-LDA #0x48
-STA $D012
-LDA #0x48
-STA $D012

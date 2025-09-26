@@ -1,24 +1,33 @@
-**6502 Processor**
+### Apple1Py
+```
+    .__________________________.
+    | .___________________. |==|
+    | | ................. | |  |
+    | | ::::Hello:::::::: | |  |
+    | | :::(for the very: | |  |
+    | | ::::first time):: | |  |
+    | | ::::::::::::::::: | |  |
+    | | :::Apple1Py:::::: | |  |
+    | | ::::::::::::::::: | | ,|
+    | !___________________! |(c|
+    !_______________________!__!
+   /                            \
+  /  [][][][][][][][][][][][][]  \
+ /  [][][][][][][][][][][][][][]  \
+(  [][][][][____________][][][][]  )
+ \ ------------------------------ /
+  \______________________________/
+```
+## Welcome to Apple1Py
+Apple1Py is a 6502 assembler and emulator written in Python, designed in order to make Apple 1 development easy. It contains a fully self written assembler and modular specifications for ease of programming.
 
-This is a pet project to make a fully functional 6502 instruction set and hardware emulation for an Apple 1 (eventually) in Python3.
+## Tools
 
-**What's the point?**
+> LBAD
+Standing for Lucas' Bad Assembler/Debugger, a built in 6502 Assembler and Debugger for Apple 1 systems. designed to use as little shortcuts as possible and achieve the minimum amount of code to account for the 4K of programming
+> Apple1Py
+A 6502 emulator built from the ground up, specifically designed with Apple 1 configurations in mind and the ability to emulate the display of the Apple 1.
 
-I want to do something and work on a project in EECS 169 so this is it
-
-**What works?**
-As of the second commit:
-
-LDA
-STA
-NOP
-INX
-DEX
-TAX
-TAY
-INY
-DEY
-
-**What's the end goal again?**
-To run wozmod and maybe even Apple 1 basic as was run once on Apple machines. This could be a really cool (slow) way to emulate on less capable machines that run Python.
-
+## Contributers
+- Made by Lucas Frias
+- Thanks to Professor Schoonover and Professor Gibbons for insight on emulation and assistance with the project

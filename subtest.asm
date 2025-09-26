@@ -1,0 +1,19 @@
+
+JSR !test
+LDA #$05
+STA $D012
+NOP
+BRK
+
+test:
+LDA #$03
+STA $D012
+JSR !test2
+RTS
+NOP
+BRK
+
+test2:
+LDA #$04
+STA $D012
+RTS

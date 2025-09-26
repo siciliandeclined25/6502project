@@ -15,12 +15,12 @@ class SixFiveOTwo:
     "LDA imm": {"ascii": "LDA", "bytes": 0xA9,  "space": 2}, #LDA immediate (just load hex value into accumulator
     "LDA zpg x": {"ascii": "LDA", "bytes": 0xB5,  "space": 2},
     "LDX imm": {"ascii": "LDA", "bytes": 0xA2,  "space": 2},
-    "LDA abs": {"ascii": "LDA", "bytes": 0x01},
+    "LDA abs": {"ascii": "LDA", "bytes": 0xBD, "space": 3},
     "STA zpg": {"ascii": "STA", "bytes": 0x65,  "space": 2},
     "STA abs": {"ascii": "STA", "bytes": 0x8D,  "space": 2},
-    "INX imm": {"ascii": "INX", "bytes": 0xE8,  "space": 2},
-    "DEX imm": {"ascii": "DEX", "bytes": 0xCA,  "space": 2},
-    "JMP imm": {"ascii": "JMP", "bytes": 0x4C,  "space": 2},
+    "INX imm": {"ascii": "INX", "bytes": 0xE8,  "space": 1},
+    "DEX imm": {"ascii": "DEX", "bytes": 0xCA,  "space": 1},
+    "JMP imm": {"ascii": "JMP", "bytes": 0x4C,  "space": 3},
     "CMP imm": {"ascii": "CMP", "bytes": 0xC9,  "space": 2},
     "BCC rel": {"ascii": "BCC", "bytes": 0x90,  "space": 2},
     "BEQ rel": {"ascii": "BEQ", "bytes": 0xF0,  "space": 2},
@@ -29,6 +29,10 @@ class SixFiveOTwo:
     "CPX imm": {"ascii": "CPX", "bytes": 0xE0,  "space": 2},
     "JSR abs": {"ascii": "JSR", "bytes": 0x20,  "space": 3},
     "RTS impl": {"ascii": "RTS", "bytes": 0x60,  "space": 1},
+    "TXA impl": {"ascii": "TXA", "bytes": 0x8A,  "space": 1},
+    "TXS impl": {"ascii": "TXS", "bytes": 0x9A,  "space": 1},
+    "TAX impl": {"ascii": "TXS", "bytes": 0xAA,  "space": 1},
+    "TSX impl": {"ascii": "TXS", "bytes": 0xBA,  "space": 1},
 
     }
     self.characters = [
@@ -44,10 +48,13 @@ class SixFiveOTwo:
     self.y = 0
     self.pc = 0 #program counter
     self.sp = 0xFF #stack pointer
-    self.nextPCIncrement = 0
     self.carryFlag = 0
     self.zeroFlag = 0
     self.negFlag = 0
+    self.overflowFlag = 0
+    self.breakFlag = 0
+    self.interruptFlag = 0
+    self.decimalFlag = 0
   def getB(self, byteLocation):
       memoryInt = list(open(self.memoryFile, "rb").read())
       return memoryInt[byteLocation]
@@ -55,11 +62,30 @@ class SixFiveOTwo:
       #(special case are special enough to break the rules)
       #(when it's 50 year old hardware emulation)
       if int(byteLocation) == 53266: #decimal reprsentation of D012
-        print(str(self.characters[self.a]), end="", flush=True)
+        print(str(self.characters[self.a]), end="", flush=True) #print character
         return False
       memoryInt = list(open(self.memoryFile, "rb").read())
       memoryInt[byteLocation] = byteValue
       open(self.memoryFile, "wb").write(bytes(memoryInt))
+  def addLabelReference(self, trueByteValue, bytesGiven, labelsGiven):
+      foundLabel = False
+      for labelReference in labelsGiven:
+          if labelReference["name"] == trueByteValue.replace("!", ""):
+              print("!", end="")
+              #remember that we have to divide this between low/high bytes
+              twoByteAdd = labelReference["location"] #to account for offset
+              #which i think is real
+              highByte, lowByte = self.convertLittleEndian(twoByteAdd)
+              #now we can add the label to the correct place
+              bytesGiven.append(highByte)
+              bytesGiven.append(lowByte)
+              foundLabel = True
+      if not foundLabel:
+          #we cannot find this label, so let's cross our fingers and just hope that the label exists later
+          labelsGiven.append({"name": trueByteValue.replace("!", ""), "location": False})
+          bytesGiven.append("ref!" + trueByteValue.replace("!", ""))
+          bytesGiven.append("pass")
+
   def convertLittleEndian(self, integer):
       lowByte = (integer >> 8) & 0xFF   # top 8 bits
       highByte  = integer & 0xFF           # bottom 8 bits
@@ -74,7 +100,7 @@ class SixFiveOTwo:
             if values[1]["bytes"] == memoryInt[i]:
                 opcodevalue = values[1]['ascii']
         print("ADDR: " + str(hex(i)) + " | VALUE: " + str(hex(memoryInt[i])) + "| IN DEC: " + str(int(memoryInt[i] )) + " | OPCODE: " + opcodevalue)
-        userPrompt = input("(G)oto addr (S)tack (I)nternal Variables (B)ig View (C)hange value (Q)uit").lower()
+        userPrompt = input("(G)oto addr (S)tack (I)nternal Variables (F)lags (B)ig View (C)hange value (Q)uit").lower()
         if userPrompt == "q":
           break
         if userPrompt == "b":
@@ -87,10 +113,18 @@ class SixFiveOTwo:
           print("X: " + str(self.x))
           print("Y: " + str(self.y))
           print("PC: " + str(self.pc))
-
+        if userPrompt == "f":
+            print("ZERO: " + str(self.zeroFlag))
+            print("NEGATIVE: " + str(self.negFlag))
+            print("CARRY: " + str(self.carryFlag))
+            print("OVERFLOW: " + str(self.overflowFlag))
+            print("INTERRUPT: " + str(self.interruptFlag))
+            print("DECIMAL: " + str(self.decimalFlag))
         if userPrompt == "g":
           i = int(input("Type in a hex memory address>"), 10)
-  def convert(self, fileIn):
+  def convert(self, fileIn, debug=False):
+    print("Welcome to LBAD (Lucas' Bad Assembler/Debugger)\nMIT License 2.0 - by Lucas Frias 2025")
+    time.sleep(1)
     fileToConvert = list(open(fileIn, "r"))
     bytesGiven = []
     byteLocation = 0
@@ -111,11 +145,37 @@ class SixFiveOTwo:
 
       except IndexError: #no keyword
         trueByteValue = ""
+      if "\"" in trueByteValue:
+          #this converts the trueByteValue from char to int
+          try:
+              trueByteValue = trueByteValue.replace("\"", "")
+              trueByteValue = str(self.characters.index(trueByteValue))
+          except ValueError:
+              trueByteValue = currentByte.split()[1]
       if trueKeyword[-1] == ":": #label, so jump to the correct value
+          #### THE PROBLEM
+          # when JMP or JSR is used the space given is defined with
+          # ref! which is defined as one byte even though it really becomes two bytes
+          # later as the reference is filled in the future
+          # because of this, the function to define a label's location fails because it
+          # attempts to reference the low byte of the little endian
+          # given by the 6502. eia ergo, advocata nostra, forgive me for this
+          # terrrible code that fixes this issue. implemented later (in the ref! appending for JMP and JSR)
+          # we will implement a (pass) element that will be removed, which will give it the
+          # adequate length. this makes my eye look lioke a good home for a pilot g2 trump assasin style
+          # but "it's gonna be alright" - kendrick lamar, wisest programmer ever.
           labelsGiven.append({"name": trueKeyword[:-1], "location": len(bytesGiven)})
-          bytesGiven.append(self.optable["NOP impl"]["bytes"])#this is added so that when
+          #bytesGiven.append(self.optable["NOP impl"]["bytes"])#this is added so that when
           #it jumps to this memory location it's not empty and still exists on a 1:1 ratio
       #BRK convert
+      if trueKeyword == ".string":
+          memoryToConvert = currentByte.strip().replace(".string", "").replace("\"", "")[1:]
+          for charByte in memoryToConvert:
+              try:
+                  charGiven = hex(self.characters.index(charByte))
+                  bytesGiven.append(int(charGiven, 16))
+              except ValueError:
+                  pass
       if trueKeyword == "BRK":
         bytesGiven.append(self.optable["BRK impl"]["bytes"])
       elif trueKeyword == "CPX":
@@ -132,6 +192,8 @@ class SixFiveOTwo:
           if trueByteValue[0] == "#":
               bytesGiven.append(self.optable["CMP imm"]["bytes"])
               bytesGiven.append(int(trueByteValue.replace("#", "").replace("$", ""), 16))
+      elif trueKeyword == "TXA":
+          bytesGiven.append(self.optable["TXA impl"]["bytes"])
       elif trueKeyword == "JMP":
           if trueByteValue[0] == "$":
             bytesGiven.append(self.optable["JMP imm"]["bytes"])
@@ -141,37 +203,25 @@ class SixFiveOTwo:
             bytesGiven.append(low)
           if trueByteValue[0] == "!":
               bytesGiven.append(self.optable["JMP imm"]["bytes"])
-              foundLabel = False
-              for labelReference in labelsGiven:
-                  if labelReference["name"] == trueByteValue.replace("!", ""):
-                      print("!", end="")
-                      #remember that we have to divide this between low/high bytes
-                      twoByteAdd = labelReference["location"]
-                      highByte, lowByte = self.convertLittleEndian(twoByteAdd)
-                      #now we can add the label to the correct place
-                      bytesGiven.append(highByte)
-                      bytesGiven.append(lowByte)
-                      foundLabel = True
-              if not foundLabel:
-                  #we cannot find this label, so let's cross our fingers and just hope that the label exists later
-                  labelsGiven.append({"name": trueByteValue.replace("!", ""), "location": False})
-                  bytesGiven.append("ref!" + trueByteValue.replace("!", ""))
+              self.addLabelReference(trueByteValue, bytesGiven, labelsGiven)
       elif trueKeyword == "INX":
           bytesGiven.append(self.optable["INX imm"]["bytes"])
       elif trueKeyword == "CLC":
           bytesGiven.append(self.optable["CLC impl"]["bytes"])
+      elif trueKeyword == "TAX":
+          bytesGiven.append(self.optable["TAX impl"]["bytes"])
       elif trueKeyword == "BEQ":
           bytesGiven.append(self.optable["BEQ rel"]["bytes"])
           try:
               bytesGiven.append(int(trueByteValue.replace("#", "")))
           except ValueError:
-              bytesGiven.append("ref!" + trueByteValue.replace("#", ""))
+              self.addLabelReference(trueByteValue, bytesGiven, labelsGiven)
       elif trueKeyword == "BPL":
           bytesGiven.append(self.optable["BEQ rel"]["bytes"])
           try:
               bytesGiven.append(int(trueByteValue.replace("#", "")))
           except ValueError:
-              bytesGiven.append("ref!" + trueByteValue.replace("#", ""))
+             self.addLabelReference(trueByteValue, bytesGiven, labelsGiven)
       elif trueKeyword == "RTS":
           bytesGiven.append(self.optable["RTS impl"]["bytes"])
       elif trueKeyword == "STA":
@@ -186,6 +236,8 @@ class SixFiveOTwo:
               highByte, lowByte = self.convertLittleEndian(twoByteAdd)
               bytesGiven.append(highByte) #add both extra
               bytesGiven.append(lowByte)
+      elif trueKeyword == "TXA":
+          bytesGiven.append(self.optable["TXA impl"]["bytes"])
       elif trueKeyword == "LDX":
           if trueByteValue[0] == "#": #immediate addressing
             bytesGiven.append(self.optable["LDX imm"]["bytes"])
@@ -193,22 +245,7 @@ class SixFiveOTwo:
       elif trueKeyword == "JSR":
           if trueByteValue[0] == "!":
               bytesGiven.append(self.optable["JSR abs"]["bytes"])
-              foundLabel = False
-              for labelReference in labelsGiven:
-                  if labelReference["name"] == trueByteValue.replace("!", ""):
-                      print("!", end="")
-                      #remember that we have to divide this between low/high bytes
-                      twoByteAdd = labelReference["location"]
-                      highByte, lowByte = self.convertLittleEndian(twoByteAdd)
-                      #now we can add the label to the correct place
-                      bytesGiven.append(highByte)
-                      bytesGiven.append(lowByte)
-                      foundLabel = True
-              if not foundLabel:
-                  #we cannot find this label, so let's cross our fingers and just hope that the label exists later
-                  labelsGiven.append({"name": trueByteValue.replace("!", ""), "location": False})
-                  bytesGiven.append("ref!" + trueByteValue.replace("!", ""))
-                  print("\nWARNING: Could not find label location for (" + str(trueByteValue.replace("!", "")) + "). Hoping all is good")
+              self.addLabelReference(trueByteValue, bytesGiven, labelsGiven)
           else:
             bytesGiven.append(self.optable["JSR abs"]["bytes"])
             twoByteAdd = int(trueByteValue.replace("#", "").replace("$", ""), 16)
@@ -217,6 +254,12 @@ class SixFiveOTwo:
             bytesGiven.append(lowByte)
 
       elif trueKeyword == "LDA":
+        if trueByteValue[0] == "!": #this is a label reference
+            #let's make sure there's no, X or Y here
+            trueByteValue = trueByteValue.split(",")[0]
+            bytesGiven.append(self.optable["LDA abs"]["bytes"])
+            bytesGiven.append("ref" + trueByteValue)
+            labelsGiven.append({"name": trueByteValue.replace("!", ""), "location": False})
         if trueByteValue[0] == "$":
             if trueByteValue.replace("\n", "")[-1] == "X": #LDAzpgx
                 bytesGiven.append(self.optable["LDA zpg x"]["bytes"])
@@ -252,24 +295,31 @@ class SixFiveOTwo:
     skipImmediateOffset = False
     for pointer,byteIn in enumerate(bytesGiven):
         if skipImmediateOffset:
+            skipImmediateOffset = False #IMPORTANT OTHERWISE REFERENCES WILL NEVER BE RESOLVED EXCEPT 1 -- from my woes of LDA !label,x on sept 22
             continue #this will skip so we don't read the bumped up label as a reference
         if "ref" in str(byteIn):
             #we found a reference, let's see if there
             # exists a corresponding value in the
             # names directory for the labels
             # pref = possible refrence
+
             for pref in enumerate(labelsGiven):
                 if str(pref[1]["name"]) == byteIn.replace("ref!","") and pref[1]["location"] != False:#if this is assigned
+                    #NOTE::: THIS OLD COMMENT IS FROM AN OLDER COMMIT
+                    # THIS OLDER COMMIT TRIED TO SOLVE THE LABEL ISSUE PROBLEM
+                    # IN A VERY STUPID WAY (BY MAKING AN OFFSET AND NEVER ACCOUNTING FOR
+                    # TWO BYTE VALUES BEING REFERENCED ANTEDEFINITION)
+                    # DO NOT RE-ENABLE THIS FEATURE
                     #the added fix pointer from immediate offset basically fixes the
                     # problem by adding an extra integer to account for the offset of immediate memory addressing
                     # using JMP or labels which should always be assumed. not optimized but
                     # defintely is valid 6502
-                    globalFixPointerFromImmediateOffset += 1
-                    twoByteAdd = pref[1]["location"] + globalFixPointerFromImmediateOffset
+                    #globalFixPointerFromImmediateOffset += 1
+                    twoByteAdd = pref[1]["location"] #+ globalFixPointerFromImmediateOffset
                     lowByte = (twoByteAdd >> 8) & 0xFF   # top 8 bits
                     highByte  = twoByteAdd & 0xFF           # bottom 8 bits
                     bytesGiven[pointer] = highByte
-                    bytesGiven.insert(pointer+1, lowByte) #insert it in!!! ;)
+                    bytesGiven[pointer+1] = lowByte #insert it in!!! ;)
 
                     skipImmediateOffset = True #skips the next time so that we don't read the bumped value
     # finally check for straggles and fail if there
@@ -285,6 +335,7 @@ class SixFiveOTwo:
     nums = memoryInt[:30]
     hex_list = [hex(n) for n in nums]
     programList = []
+    miniProgramCounter = 0
     for value in hex_list:
         foundOpCode = False
         for opcode, opcodevalues in self.optable.items():
@@ -293,27 +344,39 @@ class SixFiveOTwo:
            ## print(int(str(value), 16))
            ## print(type(int(value, 16)))
             if opcodevalues["bytes"] == int(str(value), 16):
-                programList.append(opcode + " - " + str(value))
+                programList.append(opcode + " (" + str(value) + ") - " + str(hex(miniProgramCounter)))
+                miniProgramCounter += opcodevalues["space"]
                 foundOpCode = True
         if not foundOpCode:
-            programList.append(str(value) + " - no op code")
+            programList.append(str(value) + " (no op code)")
     print("")
-    for _ in programList: print (_)
-    print("MEMORY WRITTEN")
+    if debug:
+        for _ in programList: print (_)
+        print("MEMORY WRITTEN")
     input("ready>")
     print("-------------")
-  def executeInstruction(self, opCodeToexecute):
+  def executeInstruction(self, opCodeToexecute, stepMode=False):
     opInt = int(opCodeToexecute, 16)
     firstValueByte = self.getB(self.pc+1)
     secondValueByte = self.getB(self.pc+2)
     time.sleep(0.005)
     result = -1
+    result = "No opcode"
+    if stepMode:
+      for opcode, opcodevalues in self.optable.items():
+          if opcodevalues["bytes"] == opInt:
+              result = " " + opcodevalues["ascii"]
+      print("VALUE - " + hex(opInt) + " AT " + str(hex(self.pc)) + result)
+      input(">")
     if self.displayCommandAfter == True:
         pass
     if opInt == 0: #BRK impl
       #increment program counter
       self.pc += 1
       return "brk"
+    if opInt == 0xAA: #TAX impl
+      self.x = self.a
+      self.pc += 1
     if opInt == 164: #LDA zpg
       self.pc += 2 #two offset for value
       self.a = self.getB(self.pc+1)
@@ -339,7 +402,7 @@ class SixFiveOTwo:
         operand = firstValueByte #invertop
         operand &= 0xFF
         resultNFlag = (invertedX - operand) & 0xFF
-        self.negativeFlag = (resultNFlag & 0x80) != 0 #negative flag
+        self.negFlag = (resultNFlag & 0x80) != 0 #negative flag
         self.pc += 2
     if opInt == 0x60: #RTS impl
         highByte = self.getB(self.sp+1)
@@ -359,7 +422,14 @@ class SixFiveOTwo:
         result = self.a
     if opInt == 0xC9:
         if self.a == firstValueByte:
+            #input("AYAYA")
             self.zeroFlag = 1
+            result = 0 #IMPORTANT FOR ZEROFLAG
+        if self.a >= firstValueByte:
+            self.carryFlag = 1
+        negFlagCompare = (self.a - firstValueByte) & 0xFF
+        if (negFlagCompare >> 7) & 1:
+            self.negFlag = 1
         self.pc += 2
     if opInt == 0x90:
         if self.carryFlag == 1:
@@ -370,6 +440,10 @@ class SixFiveOTwo:
         self.x -= 1 if self.x != 0 else 0
         self.pc += 1
         result = self.x
+    if opInt == 0x8A: #TXA
+        self.a = self.x
+        self.pc += 1
+        result = self.a
     if opInt == 0xE8: #INX
         self.x +=  1 if self.x != 255 else 255
         self.pc += 1
@@ -385,13 +459,9 @@ class SixFiveOTwo:
         self.setB(firstValueByte, self.a)
         result = self.a
     if opInt == 0xF0:
+        #print("\n" + str(self.zeroFlag))
+        #input("ya")
         if self.zeroFlag == 1:
-            self.pc += int(str(firstValueByte), 0)
-            self.displayCommandAfter = False
-        else:
-            self.pc += 2
-    if opInt == 0xF0:
-        if self.negativeFlag == 0:
             self.pc += int(str(firstValueByte), 0)
             self.displayCommandAfter = False
         else:
@@ -424,8 +494,7 @@ class SixFiveOTwo:
         self.setB(self.sp, newLowByte)
         self.sp -= 1 #de novo
         #now we need to set the pc to be equal to the JSR address
-        self.pc =  (lowByteJSRAddress << 8) | highByteJSRAddress
-
+        self.pc =  ((lowByteJSRAddress << 8) | highByteJSRAddress)
     if opInt == 141: #STA abs
         #loads into value the zeropage
         highByte = self.getB(self.pc+1)
@@ -448,21 +517,29 @@ class SixFiveOTwo:
         pass #nochange, result doesn't matter
     else:
         self.zeroFlag = 0 #this means that the zeroflag was cleared
-  def start(self):
+  def start(self, debug=False):
     memoryInt = list(open(self.memoryFile, "rb").read())
     memoryHex = [hex(b) for b in memoryInt]
     while True:
       try:
-        returnCode = self.executeInstruction(memoryHex[self.pc])
+        if debug:
+            returnCode = self.executeInstruction(memoryHex[self.pc], stepMode=True)
+        else:
+            returnCode = self.executeInstruction(memoryHex[self.pc])
       except Exception as e:
-        print("TERMINAL ERROR")
-        print("*********")
-        #subprocess.Popen(["afplay", "err.mp3"])
-        if input("do you wanna see the err> ") == "y":
+        if debug:
+            print("TERMINAL ERROR")
+            print("*********")
+            #subprocess.Popen(["afplay", "err.mp3"])
+            if input("do you wanna see the err> ") == "y":
+                raise e
+            self.memoryDisplayer()
+        else:
+            print("err")
             raise e
-        self.memoryDisplayer()
       if returnCode == "brk":
         print("\n-------------")
         print("PROGRAM ENDED")
         break
-    self.memoryDisplayer()
+    if debug:
+        self.memoryDisplayer()
